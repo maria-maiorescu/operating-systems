@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# C/C++ build outputs
+*.o
+*.out
+*.dSYM/
+
+
