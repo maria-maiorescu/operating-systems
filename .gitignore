@@ -4,8 +4,12 @@
 # C/C++ build outputs
 *.o
 *.out
-*.dSYM/
 
 
-lab2/testopt
-lab2/filesizes_recursive
+# Ignore compiled binaries without an extension
+*
+!*/
+!*.*
+.DS_Store
+
+*.dSYM
