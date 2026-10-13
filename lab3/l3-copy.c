@@ -3,7 +3,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
-
+ #include <errno.h>
+ 
 /** 
     argv[0] = file
     argv[1] = source
@@ -27,7 +28,7 @@ int main(int argc, char** argv) {
     fdSource = open(argv[1], O_RDONLY);     // open the sorce file, in read-only mode
 
     if (fdSource < 0) {
-        printf("Can't open the source file: %s\n", argv[1]);
+        printf("Can't open the source file: %s, error %d\n", argv[1], errno);
         return 2;
     }
 
