@@ -4,13 +4,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
+#include <string.h>
 
 int showFile(char* fileName) {
     int fd;
     fd = open(fileName, O_RDONLY);
 
     if (fd < 0) {
-        printf("Error, couldn't open the file: %s\n", fileName);
+        fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
         return 1;
     }
     printf("\nContents of file %s\n", fileName);
@@ -22,12 +24,14 @@ int showFile(char* fileName) {
         int n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
 
         if (n_write < 0) {  // read from file, but couldn't write 
-            printf("Error writing to the screen\n");
+            fprintf(stderr, "Error writing to the screen: %s\n", strerror(errno));
+            close(fd);
             return 4;
         }
     }
     if (n < 0) {    // couldn't read the file 
-        printf("Error reading the file\n");
+        fprintf(stderr, "Error reading %s: %s\n", fileName, strerror(errno));
+        close(fd);
         return 3;
     }
 

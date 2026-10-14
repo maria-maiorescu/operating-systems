@@ -3,7 +3,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <fcntl.h>
- #include <errno.h>
+#include <errno.h>
+#include <string.h>
  
 /** 
     argv[0] = file
@@ -28,38 +29,38 @@ int main(int argc, char** argv) {
     fdSource = open(argv[1], O_RDONLY);     // open the sorce file, in read-only mode
 
     if (fdSource < 0) {
-        printf("Can't open the source file: %s, error %d\n", argv[1], errno);
-        return 2;
+        fprintf(stderr, "Can't open the source file %s: %s\n", argv[1], strerror(errno));
+        return errno;
     }
 
     fdDest = open(argv[2], O_EXCL | O_CREAT | O_WRONLY, 0640);    // open the destination file (if it exists -> error) - write only mode
 
     if (fdDest < 0) {
-        printf("Can't open the destination file: %s\n", argv[2]);
+        fprintf(stderr, "Can't open the destination file %s: %s\n", argv[2], strerror(errno));
         close(fdSource);
-        return 3;
+        return errno;
     }
 
     while ((readBytes = read(fdSource, buff, BUFF_SIZE)) > 0) {   // reads from the file 
         int writeBytes = write(fdDest, buff, readBytes);    // write the buffer into the dest. file
 
         if (writeBytes != readBytes) {
-            printf("Error while writing %d bytes instead of %d\n", writeBytes, readBytes);
+            fprintf(stderr, "Error while writing %d bytes instead of %d: %s\n", writeBytes, readBytes, strerror(errno));
 
             close(fdSource);
             close(fdDest);
 
-            return 4;
+            return errno;
         }
     }
 
     if (readBytes < 0) {
-        printf("Error, can't read from the source file %s\n", argv[1]);
+        fprintf(stderr, "Error, can't read from the source file %s: %s\n", argv[1], strerror(errno));
 
         close(fdSource);
         close(fdDest);
 
-        return 5;
+        return errno;
     }
     
     close(fdSource);
