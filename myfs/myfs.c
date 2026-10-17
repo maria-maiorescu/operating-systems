@@ -14,13 +14,14 @@
     -m : Move or rename files (mv)
  */
 
-#define ARGUMENTS "tacmC"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCi"    //the list of arguments accepted by the program
 
 int exeTouch = 0;       // flag for the 'touch' option
 int exeCat = 0;         // flag for the 'cat' option
 int exeCopy = 0;        // flag for the 'copy' option
 int exeMove = 0;        // flag for the 'move' option
-int optNonExFile = 0;   // flaf for the 'touch -C ' (don't create non-existing files)
+int optNonExFile = 0;   // flag for the 'touch -C ' (don't create non-existing files)
+int optConfOverwrite = 0; // flag to confirm before overwriting
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -101,6 +102,30 @@ void executeCat(int argc, char **argv) {
     }
 }
 
+int doNotOverwrite(char *fileName) {
+    printf("Do you want to overwrite the file %s? (y/n): ", fileName);
+    fflush(stdout);
+
+    char answer[32];
+
+    while (fgets(answer, sizeof(answer), stdin) != NULL) {
+        char option = answer[0];
+
+        if (option == 'y') {
+            return 0;   // overwrite accepted
+        }
+        if (option == 'n') {
+            return 1;   // do not overwrite
+        }
+
+        printf("Invalid answer. Please type y or n: ");
+        fflush(stdout);
+    }
+
+    // if input stream closes, default to "do not overwrite"
+    return 1;
+}
+
 int executeCopy(char *sourceFile, char *destFile) {
     #define BUFF_SIZE 1024
 
@@ -116,7 +141,20 @@ int executeCopy(char *sourceFile, char *destFile) {
         return errno;
     }
 
-    fdDest = open(destFile, O_EXCL | O_CREAT | O_WRONLY, 0640);    // open the destination file (if it exists -> error) - write only mode
+    if (optConfOverwrite) {
+        // checks if the file exists
+        if (access(destFile, F_OK) == 0) { 
+            //file exists
+            if (doNotOverwrite(destFile)) {
+                // the user doesn't accept the overwrite
+                close(fdSource);
+                return 1;
+            }
+        }
+    }
+
+    // open the destination file (if it exists -> overwrite) 
+    fdDest = open(destFile, O_CREAT | O_WRONLY, 0640);  
 
     if (fdDest < 0) {
         fprintf(stderr, "Can't open the destination file %s: %s\n", destFile, strerror(errno));
@@ -182,6 +220,10 @@ int main(int argc, char **argv) {
                 exeCopy = 1;
                 break;
 
+            case 'i':
+                optConfOverwrite = 1;
+                break;
+
             case 'm':
                 exeMove = 1;
                 break;
@@ -215,8 +257,9 @@ int main(int argc, char **argv) {
   
     if (exeMove) {
         if (argc == optind + 2) {
-            executeCopy(argv[optind], argv[optind + 1]);
-            deleteFile(argv[optind]);
+            if (executeCopy(argv[optind], argv[optind + 1]) == 0) {
+                deleteFile(argv[optind]);
+            }  
         } else {
             fprintf(stderr, "Not enough arguments\n");
         }
