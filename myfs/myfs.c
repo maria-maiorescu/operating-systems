@@ -5,6 +5,8 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/stat.h>
+#include <sys/time.h>
 
 /**
  * The operation must be selected using one of the following options:
@@ -12,9 +14,10 @@
     -a : Display file contents (cat)
     -c : Copy files (cp)
     -m : Move or rename files (mv)
+    -p : Preserve permissions and timestamps for copy/move
  */
 
-#define ARGUMENTS "tacmCiNv"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCiNvp"    //the list of arguments accepted by the program
 
 int exeTouch = 0;         // flag for the 'touch' option
 int exeCat = 0;           // flag for the 'cat' option
@@ -24,6 +27,7 @@ int optNonExFile = 0;     // flag for the 'touch -C ' (don't create non-existing
 int optConfOverwrite = 0; // flag to confirm before overwriting
 int optNoOverwrite = 0;   // flag to not overwrite exisiting files
 int optDisplayOp = 0;     // flag to display each copy/ move operation
+int optPreserve = 0;      // flag to preserve permissions and timestamps
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -41,6 +45,7 @@ int touchFile(char *fileName){
         openFlags = O_CREAT | O_RDONLY;
     }
 
+    // POSIX open(): create/open file and return a file descriptor.
     fd = open(fileName, openFlags, 0640);
 
     if (fd < 0) {
@@ -48,6 +53,7 @@ int touchFile(char *fileName){
         return errno;
     }
 
+    // POSIX close(): release the file descriptor.
     close(fd);
     return 0; 
 }
@@ -67,6 +73,7 @@ void executeTouch(int argc, char **argv) {
 
 int catFile(char *fileName) {
     int fd;
+    // POSIX open(): open existing file for reading.
     fd = open(fileName, O_RDONLY);
 
     if (fd < 0) {
@@ -78,11 +85,14 @@ int catFile(char *fileName) {
     int n;  // number of read characters
     char buff[10];  // temporary buffer (temporary space for processing)
 
+    // POSIX read(): read bytes from fd into buffer; returns number of bytes read.
     while ((n = read(fd, buff, 10)) > 0) {      // reads 10 characters from file to buffer
+        // POSIX write(): write exactly n bytes to stdout.
         int n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
 
         if (n_write < 0) {  // read from file, but couldn't write 
             fprintf(stderr, "Error writing to the screen: %s\n", strerror(errno));
+            // POSIX close(): close input file descriptor.
             close(fd);
             return 4;
         }
@@ -136,7 +146,9 @@ int executeCopy(char *sourceFile, char *destFile) {
     int fdDest;
     int readBytes;  // the number of read bytes
     int openFlags;  // flags used to open destination file
+    struct stat sourceStat;
 
+    // POSIX open(): open source file for reading.
     fdSource = open(sourceFile, O_RDONLY);     // open the sorce file, in read-only mode
 
     if (fdSource < 0) {
@@ -144,8 +156,16 @@ int executeCopy(char *sourceFile, char *destFile) {
         return errno;
     }
 
+    // POSIX fstat(): fetch source metadata (mode + timestamps) from the open descriptor.
+    if (optPreserve && fstat(fdSource, &sourceStat) < 0) {
+        fprintf(stderr, "Can't read metadata from source file %s: %s\n", sourceFile, strerror(errno));
+        close(fdSource);
+        return errno;
+    }
+
     if (optConfOverwrite) {
         // checks if the file exists
+        // POSIX access(F_OK): check destination path existence.
         if (access(destFile, F_OK) == 0) { 
             //file exists
             if (doNotOverwrite(destFile)) {
@@ -163,6 +183,7 @@ int executeCopy(char *sourceFile, char *destFile) {
     }
 
     // open the destination file (if it exists -> overwrite) 
+    // POSIX open(): create/open destination file for writing.
     fdDest = open(destFile, openFlags, 0640);  
 
     if (fdDest < 0) {
@@ -171,6 +192,7 @@ int executeCopy(char *sourceFile, char *destFile) {
         return errno;
     }
 
+    // POSIX read()/write(): stream file contents from source fd to destination fd.
     while ((readBytes = read(fdSource, buff, BUFF_SIZE)) > 0) {   // reads from the file 
         int writeBytes = write(fdDest, buff, readBytes);    // write the buffer into the dest. file
 
@@ -192,6 +214,30 @@ int executeCopy(char *sourceFile, char *destFile) {
 
         return errno;
     }
+
+    if (optPreserve) {
+        struct timeval times[2];
+
+        // POSIX fchmod(): apply source permission bits to destination file.
+        if (fchmod(fdDest, sourceStat.st_mode & 07777) < 0) {
+            fprintf(stderr, "Can't preserve permissions on %s: %s\n", destFile, strerror(errno));
+            close(fdSource);
+            close(fdDest);
+            return errno;
+        }
+
+        TIMESPEC_TO_TIMEVAL(&times[0], &sourceStat.st_atimespec);
+        TIMESPEC_TO_TIMEVAL(&times[1], &sourceStat.st_mtimespec);
+
+        // POSIX futimes(): copy access/modify timestamps to destination file.
+        if (futimes(fdDest, times) < 0) {
+            fprintf(stderr, "Can't preserve timestamps on %s: %s\n", destFile, strerror(errno));
+            // POSIX close(): release both descriptors after copy completes.
+            close(fdSource);
+            close(fdDest);
+            return errno;
+        }
+    }
     
     close(fdSource);
     close(fdDest);
@@ -200,6 +246,7 @@ int executeCopy(char *sourceFile, char *destFile) {
 }
 
 int deleteFile(char *fileName) {
+    // POSIX unlink(): remove directory entry for source file.
     if (unlink(fileName) < 0) {      // the source file is being deleted 
         fprintf(stderr, "Failed to delete source file %s: %s\n", fileName, strerror(errno)); 
         return errno;
@@ -211,6 +258,7 @@ int main(int argc, char **argv) {
     int opt;    //current option from getopt
 
     //arguments for touch/cat/cp/mv with -
+    // POSIX getopt(): parse short options from command-line arguments.
     while ((opt = getopt(argc, argv, ARGUMENTS)) != -1) {
         switch (opt) {
             case 't':
@@ -239,6 +287,10 @@ int main(int argc, char **argv) {
 
             case 'v':
                 optDisplayOp = 1;
+                break;
+
+            case 'p':
+                optPreserve = 1;
                 break;
 
             case 'm':
