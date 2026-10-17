@@ -14,14 +14,16 @@
     -m : Move or rename files (mv)
  */
 
-#define ARGUMENTS "tacmCi"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCiNv"    //the list of arguments accepted by the program
 
-int exeTouch = 0;       // flag for the 'touch' option
-int exeCat = 0;         // flag for the 'cat' option
-int exeCopy = 0;        // flag for the 'copy' option
-int exeMove = 0;        // flag for the 'move' option
-int optNonExFile = 0;   // flag for the 'touch -C ' (don't create non-existing files)
+int exeTouch = 0;         // flag for the 'touch' option
+int exeCat = 0;           // flag for the 'cat' option
+int exeCopy = 0;          // flag for the 'copy' option
+int exeMove = 0;          // flag for the 'move' option
+int optNonExFile = 0;     // flag for the 'touch -C ' (don't create non-existing files)
 int optConfOverwrite = 0; // flag to confirm before overwriting
+int optNoOverwrite = 0;   // flag to not overwrite exisiting files
+int optDisplayOp = 0;     // flag to display each copy/ move operation
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -133,6 +135,7 @@ int executeCopy(char *sourceFile, char *destFile) {
     int fdSource;   // file descriptor 
     int fdDest;
     int readBytes;  // the number of read bytes
+    int openFlags;  // flags used to open destination file
 
     fdSource = open(sourceFile, O_RDONLY);     // open the sorce file, in read-only mode
 
@@ -153,8 +156,14 @@ int executeCopy(char *sourceFile, char *destFile) {
         }
     }
 
+    openFlags = O_CREAT | O_WRONLY;
+
+    if (optNoOverwrite) {
+        openFlags |= O_EXCL;    // adds the exclusive mode -> throws an error if the file exists
+    }
+
     // open the destination file (if it exists -> overwrite) 
-    fdDest = open(destFile, O_CREAT | O_WRONLY, 0640);  
+    fdDest = open(destFile, openFlags, 0640);  
 
     if (fdDest < 0) {
         fprintf(stderr, "Can't open the destination file %s: %s\n", destFile, strerror(errno));
@@ -224,6 +233,14 @@ int main(int argc, char **argv) {
                 optConfOverwrite = 1;
                 break;
 
+            case 'N':
+                optNoOverwrite = 1;
+                break;
+
+            case 'v':
+                optDisplayOp = 1;
+                break;
+
             case 'm':
                 exeMove = 1;
                 break;
@@ -248,7 +265,11 @@ int main(int argc, char **argv) {
 
     if (exeCopy) {
         if (argc == optind + 2) {
-            executeCopy(argv[optind], argv[optind + 1]);
+            if (executeCopy(argv[optind], argv[optind + 1]) == 0) {
+                if (optDisplayOp) {
+                    printf("Copy successful %s -> %s\n", argv[optind], argv[optind +1]);
+                }
+            }
         } else {
             fprintf(stderr, "Not enough arguments\n");
         }
@@ -258,13 +279,15 @@ int main(int argc, char **argv) {
     if (exeMove) {
         if (argc == optind + 2) {
             if (executeCopy(argv[optind], argv[optind + 1]) == 0) {
-                deleteFile(argv[optind]);
+                if (deleteFile(argv[optind]) == 0) {
+                    if (optDisplayOp) {
+                        printf("Move successful %s -> %s\n", argv[optind], argv[optind +1]);
+                    }
+                }                
             }  
         } else {
             fprintf(stderr, "Not enough arguments\n");
         }
     }
     
-       
-
 }
