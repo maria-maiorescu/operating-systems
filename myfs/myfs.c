@@ -17,7 +17,7 @@
     -p : Preserve permissions and timestamps for copy/move
  */
 
-#define ARGUMENTS "tacmCiNvp"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCiNvpn"    //the list of arguments accepted by the program
 
 int exeTouch = 0;         // flag for the 'touch' option
 int exeCat = 0;           // flag for the 'cat' option
@@ -28,6 +28,7 @@ int optConfOverwrite = 0; // flag to confirm before overwriting
 int optNoOverwrite = 0;   // flag to not overwrite exisiting files
 int optDisplayOp = 0;     // flag to display each copy/ move operation
 int optPreserve = 0;      // flag to preserve permissions and timestamps
+int optNrLines = 0;       // flag that numbers all lines
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -71,7 +72,8 @@ void executeTouch(int argc, char **argv) {
     }
 }
 
-int catFile(char *fileName) {
+// displays the content of a file
+int catDisplayContents(char *fileName) {
     int fd;
     // POSIX open(): open existing file for reading.
     fd = open(fileName, O_RDONLY);
@@ -103,9 +105,82 @@ int catFile(char *fileName) {
         return 3;
     }
 
-   close(fd);
-
+    close(fd);
     return 0;
+}
+
+int readLine(int fd, char *lineBuffer, int bufferSize) {
+    int length = 0;
+
+    // Reads one line (or part of it if it is longer than the buffer).
+    // Return values:
+    //  1  => at least one byte was read (line available in lineBuffer)
+    //  0  => EOF (end of file) and no bytes were read
+    // -1  => read error (errno is set by read)
+
+    while (1) {
+        char ch;    //one character that will be read
+        int bytesRead = read(fd, &ch, 1); // read one charcter
+
+        if (bytesRead < 0) {
+            return -1;
+        }
+
+        if (bytesRead == 0) {
+            if (length == 0) {
+                return 0;
+            }
+            break;
+        }
+
+        if (length + 1 < bufferSize) {
+            lineBuffer[length++] = ch;  // saves the read char. in buffer 
+        }
+
+        if (ch == '\n') {
+            break;  //stops when a new line is found
+        }
+    }
+
+    lineBuffer[length] = '\0';  // null terminates the buffer
+    return 1;
+}
+
+int catCountLines(char *fileName) {
+    int fd;
+    int lineCount = 0;
+    char lineBuffer[1024];  // buffer to hold the lines
+    int readStatus;
+
+    // POSIX open(): open existing file for reading.
+    fd = open(fileName, O_RDONLY);
+
+    if (fd < 0) {
+        fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
+        return 1;
+    }
+
+    // Repeatedly read lines with a fixed-size stack buffer and count them.
+    while ((readStatus = readLine(fd, lineBuffer, sizeof(lineBuffer))) == 1) {
+        lineCount++;
+    }
+
+    if (readStatus < 0) {
+        fprintf(stderr, "Error reading lines from %s: %s\n", fileName, strerror(errno));
+        close(fd);
+        return 1;
+    }
+
+    close(fd);
+    printf("Number of lines in %s: %d\n", fileName, lineCount);
+    return 0;
+}
+
+int catFile(char *fileName) {
+    if (optNrLines) {
+        return catCountLines(fileName);
+    }
+    return catDisplayContents(fileName);
 }
 
 void executeCat(int argc, char **argv) {
@@ -291,6 +366,10 @@ int main(int argc, char **argv) {
 
             case 'p':
                 optPreserve = 1;
+                break;
+
+            case 'n':
+                optNrLines = 1;
                 break;
 
             case 'm':
