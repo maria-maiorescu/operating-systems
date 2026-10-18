@@ -90,34 +90,47 @@ int catDisplayContents(char *fileName) {
 
     int n;  // number of read characters
     char buff[10];  // temporary buffer (temporary space for processing)
+    int previousLineEmpty = 0;   // tracks if the previously finished line was empty
+    int currentLineHasContent = 0; // tracks whether current line has non-newline content
 
     // POSIX read(): read bytes from fd into buffer; returns number of bytes read.
     while ((n = read(fd, buff, 10)) > 0) {      // reads 10 characters from file to buffer
         int n_write;    // nr of charcters written on a line
 
-        if (optEndLine || optTabs) {
+        if (optEndLine || optTabs || optSuppLines) {
             for (int i = 0; i < n; i++) {   // searches for ne line characters 
-                if (buff[i] == '\n' && optEndLine) {      // cheks if it's a new line 
-                    n_write = write(STDOUT_FILENO, "$\n", 2);    // writes a new line with the $ ending
+                if (buff[i] == '\n') {
+                    int isEmptyLine = !currentLineHasContent;  
+
+                    if (optSuppLines && isEmptyLine && previousLineEmpty) {
+                        currentLineHasContent = 0;
+                        continue;   // suppress consecutive empty line
+                    }
+
+                    if (optEndLine) {
+                        n_write = write(STDOUT_FILENO, "$\n", 2);    // writes a new line with the $ ending
+                    } else {
+                        n_write = write(STDOUT_FILENO, &buff[i], 1);
+                    }
+
+                    // prperares the flags for the next line
+                    previousLineEmpty = isEmptyLine;
+                    currentLineHasContent = 0;
 
                 } else if (buff[i] == '\t' && optTabs) {    // check if tabs exist
                     n_write = write(STDOUT_FILENO, "^I", 2);
+                    currentLineHasContent = 1;
 
                 } else {
                     n_write = write(STDOUT_FILENO, &buff[i], 1);  // writes normal character
 
-                    if (n_write != 1) {
-                        fprintf(stderr, "Error writing to the screen: %s\n", strerror(errno));
-                        close(fd);
-                        return 4;
-                    }
+                    currentLineHasContent = 1;
                 }
             }
 
         } else {
             // POSIX write(): write exactly n bytes to stdout
             n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
-
         }
         
         if (n_write < 0) {  // read from file, but couldn't write 
