@@ -17,7 +17,7 @@
     -p : Preserve permissions and timestamps for copy/move
  */
 
-#define ARGUMENTS "tacmCiNvpn"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCiNvpnbESs"    //the list of arguments accepted by the program
 
 int exeTouch = 0;         // flag for the 'touch' option
 int exeCat = 0;           // flag for the 'cat' option
@@ -29,6 +29,10 @@ int optNoOverwrite = 0;   // flag to not overwrite exisiting files
 int optDisplayOp = 0;     // flag to display each copy/ move operation
 int optPreserve = 0;      // flag to preserve permissions and timestamps
 int optNrLines = 0;       // flag that numbers all lines
+int optNonEmptLines = 0;  // flag that numbers non-empty lines only
+int optEndLine = 0;       // flag that marks line endings with $
+int optTabs = 0;          // flag that displays isplay tabs as ^I
+int optSuppLines = 0;     // flag that suppresses consecutive empty lines into a single one
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -89,11 +93,36 @@ int catDisplayContents(char *fileName) {
 
     // POSIX read(): read bytes from fd into buffer; returns number of bytes read.
     while ((n = read(fd, buff, 10)) > 0) {      // reads 10 characters from file to buffer
-        // POSIX write(): write exactly n bytes to stdout.
-        int n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
+        int n_write;    // nr of charcters written on a line
 
+        if (optEndLine || optTabs) {
+            for (int i = 0; i < n; i++) {   // searches for ne line characters 
+                if (buff[i] == '\n' && optEndLine) {      // cheks if it's a new line 
+                    n_write = write(STDOUT_FILENO, "$\n", 2);    // writes a new line with the $ ending
+
+                } else if (buff[i] == '\t' && optTabs) {    // check if tabs exist
+                    n_write = write(STDOUT_FILENO, "^I", 2);
+
+                } else {
+                    n_write = write(STDOUT_FILENO, &buff[i], 1);  // writes normal character
+
+                    if (n_write != 1) {
+                        fprintf(stderr, "Error writing to the screen: %s\n", strerror(errno));
+                        close(fd);
+                        return 4;
+                    }
+                }
+            }
+
+        } else {
+            // POSIX write(): write exactly n bytes to stdout
+            n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
+
+        }
+        
         if (n_write < 0) {  // read from file, but couldn't write 
             fprintf(stderr, "Error writing to the screen: %s\n", strerror(errno));
+
             // POSIX close(): close input file descriptor.
             close(fd);
             return 4;
@@ -149,6 +178,7 @@ int readLine(int fd, char *lineBuffer, int bufferSize) {
 int catCountLines(char *fileName) {
     int fd;
     int lineCount = 0;
+    int nonEmpLineCount = 0;
     char lineBuffer[1024];  // buffer to hold the lines
     int readStatus;
 
@@ -162,6 +192,20 @@ int catCountLines(char *fileName) {
 
     // Repeatedly read lines with a fixed-size stack buffer and count them.
     while ((readStatus = readLine(fd, lineBuffer, sizeof(lineBuffer))) == 1) {
+        int hasContent = 0;
+
+        // A non-empty line has at least one character different from '\n'.
+        // This also correctly counts a last line that has no trailing '\n'.
+        for (int index = 0; lineBuffer[index] != '\0'; index++) {
+            if (lineBuffer[index] != '\n') {
+                hasContent = 1;
+                break;
+            }
+        }
+
+        if (hasContent) {
+            nonEmpLineCount++; 
+        }
         lineCount++;
     }
 
@@ -172,12 +216,21 @@ int catCountLines(char *fileName) {
     }
 
     close(fd);
-    printf("Number of lines in %s: %d\n", fileName, lineCount);
+
+    if (optNrLines) {
+        printf("Number of lines in %s: %d\n", fileName, lineCount);
+    }
+
+    if (optNonEmptLines) {
+        printf("Number of non-empty lines in %s: %d\n", fileName, nonEmpLineCount);
+
+    }
+    
     return 0;
 }
 
 int catFile(char *fileName) {
-    if (optNrLines) {
+    if (optNrLines || optNonEmptLines) {
         return catCountLines(fileName);
     }
     return catDisplayContents(fileName);
@@ -371,11 +424,27 @@ int main(int argc, char **argv) {
             case 'n':
                 optNrLines = 1;
                 break;
+            
+            case 'b':
+                optNonEmptLines = 1;
+                break;
+
+            case 'E':
+                optEndLine = 1;
+                break;
+            
+            case 'S':
+                optTabs = 1;
+                break;
+
+            case 's':
+                optSuppLines = 1;
+                break;
 
             case 'm':
                 exeMove = 1;
                 break;
-
+            
             case '?':
                 fprintf(stderr, "Unknown option character `%c'.\n", optopt);
                 break;
