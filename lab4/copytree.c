@@ -79,6 +79,36 @@ void processFile(char *srcFileName, char *destFileName) {
     copyFile(srcFileName, destFileName);
 }
 
+int copySymLink(char *srcLinkName, char *destLinkName) {
+    char target[PATH_MAX + 1];
+    ssize_t targetLen;
+
+    /*
+     * readlink() returns the raw link target path (no trailing '\0').
+     * We add '\0' so the target can be passed safely to symlink().
+     */
+    targetLen = readlink(srcLinkName, target, PATH_MAX);
+
+    if (targetLen == -1) {
+        fprintf(stderr, "Can't read symbolic link %s: %s\n", srcLinkName, strerror(errno));
+        return errno;
+    }
+
+    target[targetLen] = '\0';
+
+    if (symlink(target, destLinkName) == -1) {
+        fprintf(stderr, "Can't create symbolic link %s: %s\n", destLinkName, strerror(errno));
+        return errno;
+    }
+
+    return 0;
+}
+
+void processSymLink(char *srcLinkName, char *destLinkName) {
+    printf("Processing symbolic link: %s -> %s\n", srcLinkName, destLinkName);
+    copySymLink(srcLinkName, destLinkName);
+}
+
 void createDir(char *dirName) {
     /*
      * S_IRWXU | S_IRWXG | S_IRWXO gives rwx for user, group, and others,
@@ -140,6 +170,10 @@ void traverseDir(char *srcPath, char *destPath) {
             processDir(fullSrcPath, fullDestPath);
             traverseDir(fullSrcPath, fullDestPath);
         }
+        /* If this is a symbolic link, recreate the link at destination. */
+        else if (S_ISLNK(st.st_mode)) {
+            processSymLink(fullSrcPath, fullDestPath);
+        }
     }
 
     if (closedir(dir) == -1) {
@@ -148,12 +182,31 @@ void traverseDir(char *srcPath, char *destPath) {
     }
 }
 
+int dirExists(char *dirName) {
+    struct stat st;
+
+    /*
+     * lstat() checks whether the path exists.
+     * S_ISDIR() ensures that the existing path is really a directory.
+     */
+    if (lstat(dirName, &st) == -1) {
+        return 0;
+    }
+
+    return S_ISDIR(st.st_mode);
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Error, usage: %s src-path dest-path", argv[0]);
         return 1;
     }
     
+    if (dirExists(argv[2])) {
+        fprintf(stderr, "The destination directory already exists!\n");
+        return 2;
+    }
+
     createDir(argv[2]);
     traverseDir(argv[1], argv[2]);
 
