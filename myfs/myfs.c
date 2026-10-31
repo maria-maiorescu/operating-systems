@@ -256,68 +256,63 @@ int readLine(int fd, char *lineBuffer, int bufferSize) {
     return 1;
 }
 
-int catCountLines(char *fileName) {
+int catPrintNumbered(char *fileName) {
     int fd;
-    int lineCount = 0;
-    int nonEmpLineCount = 0;
-    char lineBuffer[1024];  // buffer to hold the lines
+    char lineBuffer[1024];
     int readStatus;
+    int lineNumber = 0;
+    int shouldPrintLine;
 
     if (fileName == NULL) {
         fd = STDIN_FILENO;
-        fileName = "STDIN";
     } else {
-        // POSIX open(): open existing file for reading.
         fd = open(fileName, O_RDONLY);
-
         if (fd < 0) {
             fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
             return 1;
         }
     }
 
-    // Repeatedly read lines with a fixed-size stack buffer and count them.
     while ((readStatus = readLine(fd, lineBuffer, sizeof(lineBuffer))) == 1) {
         int hasContent = 0;
 
-        // A non-empty line has at least one character different from '\n'.
-        // This also correctly counts a last line that has no trailing '\n'.
         for (int index = 0; lineBuffer[index] != '\0'; index++) {
-            if (lineBuffer[index] != '\n') {
+            if (lineBuffer[index] != '\n' && lineBuffer[index] != '\r') {
                 hasContent = 1;
                 break;
             }
         }
 
-        if (hasContent) {
-            nonEmpLineCount++; 
+        shouldPrintLine = 1;
+        if (optNonEmptyLines && !hasContent) {
+            shouldPrintLine = 0;
         }
-        lineCount++;
+
+        if (shouldPrintLine) {
+            lineNumber++;
+            printf("%3d  ", lineNumber);
+            printf("%s", lineBuffer);
+        }
     }
 
     if (readStatus < 0) {
-        fprintf(stderr, "Error reading lines from %s: %s\n", fileName, strerror(errno));
-        close(fd);
+        fprintf(stderr, "Error reading %s: %s\n", fileName ? fileName : "STDIN", strerror(errno));
+        if (fileName != NULL) {
+            close(fd);
+        }
         return 1;
     }
 
-    close(fd);
-
-    if (optNrLines) {
-        printf("Number of lines in %s: %d\n", fileName, lineCount);
+    if (fileName != NULL) {
+        close(fd);
     }
 
-    if (optNonEmptyLines) {
-        printf("Number of non-empty lines in %s: %d\n", fileName, nonEmpLineCount);
-
-    }
-    
     return 0;
 }
 
 int catFile(char *fileName) {
     if (optNrLines || optNonEmptyLines) {
-        return catCountLines(fileName);
+        return catPrintNumbered(fileName);
     }
     return catDisplayContents(fileName);
 }
@@ -568,25 +563,24 @@ int main(int argc, char **argv) {
         if (argc == optind + 2) {
             if (executeCopy(argv[optind], argv[optind + 1]) == 0) {
                 if (optDisplayOp) {
-                    printf("Copy successful %s -> %s\n", argv[optind], argv[optind +1]);
+                    printf("%s -> %s\n", argv[optind], argv[optind + 1]);
                 }
             }
         } else {
             fprintf(stderr, "Not enough arguments\n");
             help();
         }
-        
     }
-  
+
     if (exeMove) {
         if (argc == optind + 2) {
             if (executeCopy(argv[optind], argv[optind + 1]) == 0) {
                 if (deleteFile(argv[optind]) == 0) {
                     if (optDisplayOp) {
-                        printf("Move successful %s -> %s\n", argv[optind], argv[optind +1]);
+                        printf("%s -> %s\n", argv[optind], argv[optind + 1]);
                     }
-                }                
-            }  
+                }
+            }
         } else {
             fprintf(stderr, "Not enough arguments\n");
             help();
