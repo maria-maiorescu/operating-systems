@@ -339,7 +339,7 @@ void executeCat(int argc, char **argv) {
 }
 
 int doNotOverwrite(char *fileName) {
-    printf("Do you want to overwrite the file %s? (y/n): ", fileName);
+    printf("Do you want to overwrite %s? (y/n): ", fileName);
     fflush(stdout);
 
     char answer[32];
@@ -489,15 +489,30 @@ int copyDir(char *sourceName, char *destName) {
         fprintf(stderr, "Can't open the %s directory\n", sourceName);
         return errno;
     }
+    
+    if (dirExists(destName)) {
+        if (optNoOverwrite) {
+            fprintf(stderr, "Directory already exists: %s\n", destName);
+            closedir(dir);
 
-    if (!dirExists(destName)) {
+            return 1;
+        }
+
+        if (optConfOverwrite) {
+            if (doNotOverwrite(destName)) {
+                closedir(dir);
+                return 1;
+            }
+        }
+
+    } else {
         int fdDest = mkdir(destName, 0775);
 
         if (fdDest < 0) {
             fprintf(stderr, "Can't create the directory %s\n", destName);
             return errno;
         }
-    }
+    } 
 
     struct dirent *entry;
 
