@@ -6,9 +6,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
+#include <dirent.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <limits.h>
 
 /**
  * The operation must be selected using one of the following options:
@@ -471,6 +473,83 @@ int executeCopyFile(char *sourceFile, char *destFile) {
     return 0;
 }
 
+int dirExists(char *path) {
+    struct stat st; // metadata for the current entry
+
+    if (lstat(path, &st) == 0) {
+        return S_ISDIR(st.st_mode);
+    }
+    return 0;
+}
+
+int copyDir(char *sourceName, char *destName) {
+    DIR *dir = opendir(sourceName);  
+
+    if (dir == NULL) {
+        fprintf(stderr, "Can't open the %s directory\n", sourceName);
+        return errno;
+    }
+
+    if (!dirExists(destName)) {
+        int fdDest = mkdir(destName, 0775);
+
+        if (fdDest < 0) {
+            fprintf(stderr, "Can't create the directory %s\n", destName);
+            return errno;
+        }
+    }
+
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char fullPathSrc[PATH_MAX];
+        char fullPathDst[PATH_MAX];
+
+        snprintf(fullPathSrc, sizeof(fullPathSrc), "%s/%s", sourceName, entry->d_name);
+        snprintf(fullPathDst, sizeof(fullPathDst), "%s/%s", destName, entry->d_name);
+
+        struct stat st;
+
+        if (lstat(fullPathSrc, &st) == 0) {
+            // 6. processing
+            if (S_ISDIR(st.st_mode)) {
+                // ......
+                
+            } else if (S_ISREG(st.st_mode)) {
+               executeCopyFile(fullPathSrc, fullPathDst);
+
+            } else if (S_ISLNK(st.st_mode)) {
+                // .....
+            }
+        } 
+
+
+    }
+    closedir(dir);
+    return 0;
+}
+
+int executeCopyDirOrFile(char *sourceName, char *destName) {
+    struct stat st; // metadata for the current entry
+
+    if (lstat(sourceName, &st) == 0) {
+        if (S_ISDIR(st.st_mode)) {
+            copyDir(sourceName, destName);
+        
+        } else if (S_ISREG(st.st_mode)) {
+            executeCopyFile(sourceName, destName);
+        
+        } else if (S_ISLNK(st.st_mode)) {
+            // .....
+        }
+    }
+    return 0;
+}
+
 int deleteFile(char *fileName) {
     // POSIX unlink(): remove directory entry for source file.
     if (unlink(fileName) < 0) {      // the source file is being deleted 
@@ -571,7 +650,7 @@ int main(int argc, char **argv) {
 
     if (exeCopy) {
         if (argc == optind + 2) {
-            if (executeCopyFile(argv[optind], argv[optind + 1]) == 0) {
+            if (executeCopyDirOrFile(argv[optind], argv[optind + 1]) == 0) {
                 if (optDisplayOp) {
                     printf("%s -> %s\n", argv[optind], argv[optind + 1]);
                 }
