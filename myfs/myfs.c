@@ -1,3 +1,5 @@
+// Maria Maiorescu - IE - gr 3
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
