@@ -21,7 +21,7 @@
     -p : Preserve permissions and timestamps for copy/move
  */
 
-#define ARGUMENTS "tacmCiNvpnbESs"    //the list of arguments accepted by the program
+#define ARGUMENTS "tacmCiNvpnbESsr"    //the list of arguments accepted by the program
 
 int exeTouch = 0;         // flag for the 'touch' option
 int exeCat = 0;           // flag for the 'cat' option
@@ -37,6 +37,7 @@ int optNonEmptyLines = 0; // flag that numbers non-empty lines only
 int optEndLine = 0;       // flag that marks line endings with $
 int optTabs = 0;          // flag that displays isplay tabs as ^I
 int optSuppLines = 0;     // flag that suppresses consecutive empty lines into a single one
+int optRecursive = 0;     // flag for recursively copy directories and their contents
 
 int invalidOpt() {
     // exactly one operation selector must be selected
@@ -469,7 +470,9 @@ int executeCopyFile(char *sourceFile, char *destFile) {
     
     close(fdSource);
     close(fdDest);
-
+    if (optDisplayOp) {
+        printf("%s -> %s\n", sourceFile, destFile);
+    }
     return 0;
 }
 
@@ -532,7 +535,9 @@ int copyDir(char *sourceName, char *destName) {
         if (lstat(fullPathSrc, &st) == 0) {
             // 6. processing
             if (S_ISDIR(st.st_mode)) {
-                // ......
+                if (optRecursive) {
+                    copyDir(fullPathSrc, fullPathDst);
+                }
                 
             } else if (S_ISREG(st.st_mode)) {
                executeCopyFile(fullPathSrc, fullPathDst);
@@ -545,6 +550,11 @@ int copyDir(char *sourceName, char *destName) {
 
     }
     closedir(dir);
+
+    if (optDisplayOp) {
+        printf("%s -> %s\n", sourceName, destName);
+    }
+
     return 0;
 }
 
@@ -636,6 +646,10 @@ int main(int argc, char **argv) {
             case 'm':
                 exeMove = 1;
                 break;
+
+            case 'r':
+                optRecursive = 1;
+                break;
             
             case '?':
                 fprintf(stderr, "Unknown option character `%c'.\n", optopt);
@@ -665,11 +679,7 @@ int main(int argc, char **argv) {
 
     if (exeCopy) {
         if (argc == optind + 2) {
-            if (executeCopyDirOrFile(argv[optind], argv[optind + 1]) == 0) {
-                if (optDisplayOp) {
-                    printf("%s -> %s\n", argv[optind], argv[optind + 1]);
-                }
-            }
+            executeCopyDirOrFile(argv[optind], argv[optind + 1]);
         } else {
             fprintf(stderr, "Not enough arguments\n");
             help();
