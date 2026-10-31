@@ -3,11 +3,12 @@ Implement a C command-line utility named myfs that provides file operations simi
 # 1. Command-line interface
 
 The operation must be selected using one of the following options:
+```
  -t : Create files or modify timestamps (touch)
  -a : Display file contents (cat)
  -c : Copy files (cp)
  -m : Move or rename files (mv)
-
+```
 # 2. Supported options
 ```
 Operation    Options    Description

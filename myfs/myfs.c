@@ -25,7 +25,7 @@ int exeCopy = 0;          // flag for the 'copy' option
 int exeMove = 0;          // flag for the 'move' option
 int optNonExFile = 0;     // flag for the 'touch -C ' (don't create non-existing files)
 int optConfOverwrite = 0; // flag to confirm before overwriting
-int optNoOverwrite = 0;   // flag to not overwrite exisiting files
+int optNoOverwrite = 0;   // flag to not overwrite existing files
 int optDisplayOp = 0;     // flag to display each copy/ move operation
 int optPreserve = 0;      // flag to preserve permissions and timestamps
 int optNrLines = 0;       // flag that numbers all lines
@@ -33,6 +33,34 @@ int optNonEmptLines = 0;  // flag that numbers non-empty lines only
 int optEndLine = 0;       // flag that marks line endings with $
 int optTabs = 0;          // flag that displays isplay tabs as ^I
 int optSuppLines = 0;     // flag that suppresses consecutive empty lines into a single one
+
+int invalidOpt() {
+    return (exeTouch + exeCat + exeCopy + exeMove) != 1;
+}
+
+void help() {
+    printf("Usage: \n");
+    printf("-t : Create files or modify timestamps (touch)\n");
+    printf("\t -C : Do not create nonexistent files.\n");
+
+    printf("-a : Display file contents (cat)\n");
+    printf("\t -n : Number all lines.\n");
+    printf("\t -b : Number non-empty lines only.\n");
+    printf("\t -E : Mark line endings with $.\n");
+    printf("\t -S : Display tabs as ^I.\n");
+    printf("\t -s : Suppress consecutive empty lines into a single one.\n");
+
+    printf("-c : Copy files (cp)\n");
+    printf("\t -i : Confirm before overwriting.\n");
+    printf("\t -N : Do not overwrite existing files.\n");
+    printf("\t -v : Display each copy operation.\n");
+    printf("\t -p : Preserve permissions and timestamps.\n");
+
+    printf("-m : Move or rename files (mv)\n");
+    printf("\t -i : Confirm before overwriting.\n");
+    printf("\t -N : Do not overwrite existing files.\n");
+    printf("\t -v : Display each move operation.\n");
+}
 
 // touch option implemented
 int touchFile(char *fileName){
@@ -460,12 +488,20 @@ int main(int argc, char **argv) {
             
             case '?':
                 fprintf(stderr, "Unknown option character `%c'.\n", optopt);
+                help();
                 break;
 
             default:
+                help();
                 abort();
 
         }
+    }
+
+    if (invalidOpt()) {
+        fprintf(stderr, "Invalid arguments!\n");
+        help();
+        return 1;
     }
 
     if (exeTouch) {
@@ -485,6 +521,7 @@ int main(int argc, char **argv) {
             }
         } else {
             fprintf(stderr, "Not enough arguments\n");
+            help();
         }
         
     }
@@ -500,6 +537,7 @@ int main(int argc, char **argv) {
             }  
         } else {
             fprintf(stderr, "Not enough arguments\n");
+            help();
         }
     }
     
