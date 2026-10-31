@@ -90,6 +90,7 @@ void help() {
 
     printf("-c : Copy files (cp)\n");
     printf("\t -i : Confirm before overwriting.\n");
+    printf("\t -r : Copy recursively.\n");
     printf("\t -N : Do not overwrite existing files.\n");
     printf("\t -v : Display each copy operation.\n");
     printf("\t -p : Preserve permissions and timestamps.\n");
@@ -98,6 +99,7 @@ void help() {
     printf("\t -i : Confirm before overwriting.\n");
     printf("\t -N : Do not overwrite existing files.\n");
     printf("\t -v : Display each move operation.\n");
+    printf("\t -r : Move recursively.\n");
 }
 
 // touch option implemented
