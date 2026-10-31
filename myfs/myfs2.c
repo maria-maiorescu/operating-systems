@@ -363,7 +363,24 @@ int doNotOverwrite(char *fileName) {
     return 1;
 }
 
-int executeCopyFile(char *sourceFile, char *destFile) {
+int deleteFile(char *fileName) {
+    // POSIX unlink(): remove directory entry for source file.
+    if (unlink(fileName) < 0) {      // the source file is being deleted 
+        fprintf(stderr, "Failed to delete source file %s: %s\n", fileName, strerror(errno)); 
+        return errno;
+    }
+    return 0;
+}
+
+int deleteDir(char *dirName) {
+    if (rmdir(dirName) < 0) {      // the source file is being deleted 
+        fprintf(stderr, "Failed to delete source directory %s: %s\n", dirName, strerror(errno)); 
+        return errno;
+    }
+    return 0;
+}
+
+int executeCopyFile(char *sourceFile, char *destFile, int isMove) {
     #define BUFF_SIZE 1024
 
     char buff[BUFF_SIZE];
@@ -470,9 +487,15 @@ int executeCopyFile(char *sourceFile, char *destFile) {
     
     close(fdSource);
     close(fdDest);
+
     if (optDisplayOp) {
         printf("%s -> %s\n", sourceFile, destFile);
     }
+
+    if (isMove) {
+        deleteFile(sourceFile);
+    }
+
     return 0;
 }
 
@@ -485,7 +508,7 @@ int dirExists(char *path) {
     return 0;
 }
 
-int copyDir(char *sourceName, char *destName) {
+int copyDir(char *sourceName, char *destName, int isMove) {
     DIR *dir = opendir(sourceName);  
 
     if (dir == NULL) {
@@ -536,11 +559,11 @@ int copyDir(char *sourceName, char *destName) {
             // 6. processing
             if (S_ISDIR(st.st_mode)) {
                 if (optRecursive) {
-                    copyDir(fullPathSrc, fullPathDst);
+                    copyDir(fullPathSrc, fullPathDst, isMove);
                 }
                 
             } else if (S_ISREG(st.st_mode)) {
-               executeCopyFile(fullPathSrc, fullPathDst);
+               executeCopyFile(fullPathSrc, fullPathDst, isMove);
 
             } else if (S_ISLNK(st.st_mode)) {
                 // .....
@@ -555,31 +578,26 @@ int copyDir(char *sourceName, char *destName) {
         printf("%s -> %s\n", sourceName, destName);
     }
 
+    if (isMove) {
+        deleteDir(sourceName);
+    }
+
     return 0;
 }
 
-int executeCopyDirOrFile(char *sourceName, char *destName) {
+int executeCopyDirOrFile(char *sourceName, char *destName, int isMove) {
     struct stat st; // metadata for the current entry
 
     if (lstat(sourceName, &st) == 0) {
         if (S_ISDIR(st.st_mode)) {
-            copyDir(sourceName, destName);
+            copyDir(sourceName, destName, isMove);
         
         } else if (S_ISREG(st.st_mode)) {
-            executeCopyFile(sourceName, destName);
-        
+            return executeCopyFile(sourceName, destName, isMove);
+
         } else if (S_ISLNK(st.st_mode)) {
             // .....
         }
-    }
-    return 0;
-}
-
-int deleteFile(char *fileName) {
-    // POSIX unlink(): remove directory entry for source file.
-    if (unlink(fileName) < 0) {      // the source file is being deleted 
-        fprintf(stderr, "Failed to delete source file %s: %s\n", fileName, strerror(errno)); 
-        return errno;
     }
     return 0;
 }
@@ -679,7 +697,7 @@ int main(int argc, char **argv) {
 
     if (exeCopy) {
         if (argc == optind + 2) {
-            executeCopyDirOrFile(argv[optind], argv[optind + 1]);
+            executeCopyDirOrFile(argv[optind], argv[optind + 1], 0);
         } else {
             fprintf(stderr, "Not enough arguments\n");
             help();
@@ -688,12 +706,8 @@ int main(int argc, char **argv) {
 
     if (exeMove) {
         if (argc == optind + 2) {
-            if (executeCopyFile(argv[optind], argv[optind + 1]) == 0) {
-                if (deleteFile(argv[optind]) == 0) {
-                    if (optDisplayOp) {
-                        printf("%s -> %s\n", argv[optind], argv[optind + 1]);
-                    }
-                }
+            if (executeCopyDirOrFile(argv[optind], argv[optind + 1], 1) == 0) {
+               
             }
         } else {
             fprintf(stderr, "Not enough arguments\n");
