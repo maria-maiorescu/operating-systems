@@ -42,9 +42,6 @@ int invalidOpt() {
 
     // touch: only -C is valid in this program
     if (exeTouch) {
-        if (optNonExFile) {
-            return 0;
-        }
         return (optConfOverwrite || optNoOverwrite || optDisplayOp || optPreserve ||
                 optNrLines || optNonEmptyLines || optEndLine || optTabs || optSuppLines);
     }
@@ -99,32 +96,43 @@ void help() {
 }
 
 // touch option implemented
-int touchFile(char *fileName){
-    int fd; // fd = file descriptor for the opened file
-    int openFlags;  // flags used to open the file
+int touchFile(char *fileName) {
+    int fd;
+    int openFlags;
+    struct timespec times[2];
 
-    /**
-     * checked the global flag -C
-     * if flag -C is set -> opens the existing files (read only)
-     * else -> opens the existing and nonexisting files
-     */
     if (optNonExFile) {
-        openFlags = O_RDONLY;
+        fd = open(fileName, O_RDONLY);
+        if (fd < 0) {
+            if (errno == ENOENT) {
+                return 0;
+            }
+            fprintf(stderr, "Error opening %s: %s\n", fileName, strerror(errno));
+            return errno;
+        }
     } else {
-        openFlags = O_CREAT | O_RDONLY;
+        openFlags = O_CREAT | O_WRONLY;
+        fd = open(fileName, openFlags, 0640);
+        if (fd < 0) {
+            fprintf(stderr, "Error opening %s: %s\n", fileName, strerror(errno));
+            return errno;
+        }
     }
 
-    // POSIX open(): create/open file and return a file descriptor.
-    fd = open(fileName, openFlags, 0640);
-
-    if (fd < 0) {
-        fprintf(stderr, "Error opening %s: %s\n", fileName, strerror(errno));
+    if (clock_gettime(CLOCK_REALTIME, &times[0]) != 0 || clock_gettime(CLOCK_REALTIME, &times[1]) != 0) {
+        fprintf(stderr, "Error updating time for %s: %s\n", fileName, strerror(errno));
+        close(fd);
         return errno;
     }
 
-    // POSIX close(): release the file descriptor.
+    if (utimensat(AT_FDCWD, fileName, times, 0) < 0) {
+        fprintf(stderr, "Error updating timestamps for %s: %s\n", fileName, strerror(errno));
+        close(fd);
+        return errno;
+    }
+
     close(fd);
-    return 0; 
+    return 0;
 }
 
 /**
