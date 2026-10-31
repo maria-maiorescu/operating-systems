@@ -11,7 +11,7 @@ int main() {
     int id = fork();
     int status;
 
-    if ( id < 0) {
+    if (id < 0) {
         printf("Error creating the process\n");
         exit(1);
     }
