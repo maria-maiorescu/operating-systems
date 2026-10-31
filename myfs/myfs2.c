@@ -418,7 +418,7 @@ int executeCopyFile(char *sourceFile, char *destFile, int isMove) {
         }
     }
 
-    openFlags = O_CREAT | O_WRONLY;
+    openFlags = O_CREAT | O_WRONLY | O_TRUNC;
 
     if (optNoOverwrite) {
         openFlags |= O_EXCL;    // adds the exclusive mode -> throws an error if the file exists
@@ -558,7 +558,7 @@ int copyDir(char *sourceName, char *destName, int isMove) {
         if (lstat(fullPathSrc, &st) == 0) {
             // 6. processing
             if (S_ISDIR(st.st_mode)) {
-                if (optRecursive) {
+                if (optRecursive || isMove) {
                     copyDir(fullPathSrc, fullPathDst, isMove);
                 }
                 
@@ -590,7 +590,7 @@ int executeCopyDirOrFile(char *sourceName, char *destName, int isMove) {
 
     if (lstat(sourceName, &st) == 0) {
         if (S_ISDIR(st.st_mode)) {
-            copyDir(sourceName, destName, isMove);
+            return copyDir(sourceName, destName, isMove);
         
         } else if (S_ISREG(st.st_mode)) {
             return executeCopyFile(sourceName, destName, isMove);
@@ -706,9 +706,7 @@ int main(int argc, char **argv) {
 
     if (exeMove) {
         if (argc == optind + 2) {
-            if (executeCopyDirOrFile(argv[optind], argv[optind + 1], 1) == 0) {
-               
-            }
+            executeCopyDirOrFile(argv[optind], argv[optind + 1], 1);
         } else {
             fprintf(stderr, "Not enough arguments\n");
             help();
