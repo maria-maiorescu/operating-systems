@@ -29,13 +29,49 @@ int optNoOverwrite = 0;   // flag to not overwrite existing files
 int optDisplayOp = 0;     // flag to display each copy/ move operation
 int optPreserve = 0;      // flag to preserve permissions and timestamps
 int optNrLines = 0;       // flag that numbers all lines
-int optNonEmptLines = 0;  // flag that numbers non-empty lines only
+int optNonEmptyLines = 0; // flag that numbers non-empty lines only
 int optEndLine = 0;       // flag that marks line endings with $
 int optTabs = 0;          // flag that displays isplay tabs as ^I
 int optSuppLines = 0;     // flag that suppresses consecutive empty lines into a single one
 
 int invalidOpt() {
-    return (exeTouch + exeCat + exeCopy + exeMove) != 1;
+    // exactly one operation selector must be selected
+    if ((exeTouch + exeCat + exeCopy + exeMove) != 1) {
+        return 1;
+    }
+
+    // touch: only -C is valid in this program
+    if (exeTouch) {
+        if (optNonExFile) {
+            return 0;
+        }
+        return (optConfOverwrite || optNoOverwrite || optDisplayOp || optPreserve ||
+                optNrLines || optNonEmptyLines || optEndLine || optTabs || optSuppLines);
+    }
+
+    // cat: -n and -b are mutually exclusive; other cat flags are allowed together
+    if (exeCat) {
+        if (optNrLines && optNonEmptyLines) {
+            return 1;
+        }
+        if (optNonExFile || optConfOverwrite || optNoOverwrite || optDisplayOp || optPreserve) {
+            return 1;
+        }
+        return 0;
+    }
+
+    // copy/move: -i and -N are mutually exclusive; other cp/mv flags are valid only here
+    if (exeCopy || exeMove) {
+        if (optConfOverwrite && optNoOverwrite) {
+            return 1;
+        }
+        if (optNonExFile || optNrLines || optNonEmptyLines || optEndLine || optTabs || optSuppLines) {
+            return 1;
+        }
+        return 0;
+    }
+
+    return 1;
 }
 
 void help() {
@@ -107,14 +143,18 @@ void executeTouch(int argc, char **argv) {
 // displays the content of a file
 int catDisplayContents(char *fileName) {
     int fd;
-    // POSIX open(): open existing file for reading.
-    fd = open(fileName, O_RDONLY);
 
-    if (fd < 0) {
-        fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
-        return 1;
+    if (fileName == NULL) {
+        fd = STDIN_FILENO;
+    } else {
+        // POSIX open(): open existing file for reading.
+        fd = open(fileName, O_RDONLY);
+
+        if (fd < 0) {
+            fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
+            return 1;
+        }
     }
-    printf("\nContents of file %s\n", fileName);
 
     int n;  // number of read characters
     char buff[10];  // temporary buffer (temporary space for processing)
@@ -123,7 +163,7 @@ int catDisplayContents(char *fileName) {
 
     // POSIX read(): read bytes from fd into buffer; returns number of bytes read.
     while ((n = read(fd, buff, 10)) > 0) {      // reads 10 characters from file to buffer
-        int n_write;    // nr of charcters written on a line
+        int n_write;    // nr of characters written on a line
 
         if (optEndLine || optTabs || optSuppLines) {
             for (int i = 0; i < n; i++) {   // searches for ne line characters 
@@ -141,7 +181,7 @@ int catDisplayContents(char *fileName) {
                         n_write = write(STDOUT_FILENO, &buff[i], 1);
                     }
 
-                    // prperares the flags for the next line
+                    // prepares the flags for the next line
                     previousLineEmpty = isEmptyLine;
                     currentLineHasContent = 0;
 
@@ -158,7 +198,7 @@ int catDisplayContents(char *fileName) {
 
         } else {
             // POSIX write(): write exactly n bytes to stdout
-            n_write = write(STDOUT_FILENO, buff, n);    // writes n charcters from buff to STDOUT (standard output = screen/ console)
+            n_write = write(STDOUT_FILENO, buff, n);    // writes n characters from buff to STDOUT (standard output = screen/ console)
         }
         
         if (n_write < 0) {  // read from file, but couldn't write 
@@ -190,7 +230,7 @@ int readLine(int fd, char *lineBuffer, int bufferSize) {
 
     while (1) {
         char ch;    //one character that will be read
-        int bytesRead = read(fd, &ch, 1); // read one charcter
+        int bytesRead = read(fd, &ch, 1); // read one character
 
         if (bytesRead < 0) {
             return -1;
@@ -223,12 +263,17 @@ int catCountLines(char *fileName) {
     char lineBuffer[1024];  // buffer to hold the lines
     int readStatus;
 
-    // POSIX open(): open existing file for reading.
-    fd = open(fileName, O_RDONLY);
+    if (fileName == NULL) {
+        fd = STDIN_FILENO;
+        fileName = "STDIN";
+    } else {
+        // POSIX open(): open existing file for reading.
+        fd = open(fileName, O_RDONLY);
 
-    if (fd < 0) {
-        fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
-        return 1;
+        if (fd < 0) {
+            fprintf(stderr, "Error, couldn't open %s: %s\n", fileName, strerror(errno));
+            return 1;
+        }
     }
 
     // Repeatedly read lines with a fixed-size stack buffer and count them.
@@ -262,7 +307,7 @@ int catCountLines(char *fileName) {
         printf("Number of lines in %s: %d\n", fileName, lineCount);
     }
 
-    if (optNonEmptLines) {
+    if (optNonEmptyLines) {
         printf("Number of non-empty lines in %s: %d\n", fileName, nonEmpLineCount);
 
     }
@@ -271,13 +316,16 @@ int catCountLines(char *fileName) {
 }
 
 int catFile(char *fileName) {
-    if (optNrLines || optNonEmptLines) {
+    if (optNrLines || optNonEmptyLines) {
         return catCountLines(fileName);
     }
     return catDisplayContents(fileName);
 }
 
 void executeCat(int argc, char **argv) {
+    if (optind == argc) {
+        catFile(NULL);
+    }
     for (int index = optind; index < argc; index++) {
         catFile(argv[index]);
     }
@@ -362,16 +410,20 @@ int executeCopy(char *sourceFile, char *destFile) {
     }
 
     // POSIX read()/write(): stream file contents from source fd to destination fd.
-    while ((readBytes = read(fdSource, buff, BUFF_SIZE)) > 0) {   // reads from the file 
-        int writeBytes = write(fdDest, buff, readBytes);    // write the buffer into the dest. file
+    while ((readBytes = read(fdSource, buff, BUFF_SIZE)) > 0) {
+        size_t totalWritten = 0;
 
-        if (writeBytes != readBytes) {
-            fprintf(stderr, "Error while writing %d bytes instead of %d: %s\n", writeBytes, readBytes, strerror(errno));
+        while (totalWritten < (size_t)readBytes) {
+            ssize_t writeBytes = write(fdDest, buff + totalWritten, (size_t)readBytes - totalWritten);
 
-            close(fdSource);
-            close(fdDest);
+            if (writeBytes < 0) {
+                fprintf(stderr, "Error while writing to %s: %s\n", destFile, strerror(errno));
+                close(fdSource);
+                close(fdDest);
+                return errno;
+            }
 
-            return errno;
+            totalWritten += (size_t)writeBytes;
         }
     }
 
@@ -467,7 +519,7 @@ int main(int argc, char **argv) {
                 break;
             
             case 'b':
-                optNonEmptLines = 1;
+                optNonEmptyLines = 1;
                 break;
 
             case 'E':
