@@ -566,7 +566,142 @@ int dirExists(char *path) {
     return 0;
 }
 
+/*
+* Check whether path is exactly prefix or begins with prefix + '/'.
+* This lets us detect cases like source=/a/b and destination=/a/b/c,
+* where moving into a descendant would create recursion or data loss.
+*/
+int pathIsPrefix(const char *path, const char *prefix) {
+    /* Example: path=/tmp/a/b, prefix=/tmp/a -> true
+     *          path=/tmp/c,    prefix=/tmp/a -> false
+     */
+    size_t pathLen = strlen(path);
+    size_t prefixLen = strlen(prefix);
+
+    if (pathLen < prefixLen) {
+        return 0;
+    }
+
+    if (strcmp(path, prefix) == 0) {
+        return 1;
+    }
+
+    return (strncmp(path, prefix, prefixLen) == 0 && path[prefixLen] == '/');
+}
+
+int isDestinationInsideSource(const char *sourceName, const char *destName) {
+    /* Example: source=/tmp/src, destination=/tmp/src/child -> reject
+     *          source=/tmp/src, destination=/tmp/newsrc     -> allow
+     */
+    char sourceReal[PATH_MAX];
+    char destReal[PATH_MAX];
+    char parent[PATH_MAX];
+    char *slash;
+
+    /* 1) Resolve the source path to a canonical absolute path.
+     *    Example: "src" -> "/Users/me/project/src"
+     */
+    if (realpath(sourceName, sourceReal) == NULL) {
+        return 1;
+    }
+
+    /* 2) If the destination path already resolves cleanly, compare it directly.
+     *    Example: dest=/tmp/src/child -> realpath works and then we check prefix.
+     */
+    if (realpath(destName, destReal) != NULL) {
+        return pathIsPrefix(destReal, sourceReal);
+    }
+
+    /* 3) The destination may be relative or may contain a final path component.
+     *    Example: dest="src/child" -> split into parent="src" and child="child".
+     */
+    snprintf(parent, sizeof(parent), "%s", destName);
+    slash = strrchr(parent, '/');
+
+    /* 4) If there is no '/', the destination is just a file/folder name in current dir.
+     *    Example: dest="child" -> resolve "./child" and test it.
+     */
+    if (slash == NULL) {
+        if (realpath(".", destReal) == NULL) {
+            return 0;
+        }
+        snprintf(destReal, sizeof(destReal), "%s/%s", destReal, parent);
+        return pathIsPrefix(destReal, sourceReal);
+    }
+
+    /* 5) Root path like "/child" is not inside source.
+     *    Example: source=/tmp/src, dest=/child -> allowed.
+     */
+    if (slash == parent) {
+        return 0;
+    }
+
+    /* 6) Split the path into its parent and final component.
+     *    Example: parent="/tmp", child="child" -> test "/tmp/child".
+     */
+    *slash = '\0';
+    if (realpath(parent, destReal) == NULL) {
+        return 0;
+    }
+
+    snprintf(destReal + strlen(destReal), sizeof(destReal) - strlen(destReal), "/%s", slash + 1);
+    return pathIsPrefix(destReal, sourceReal);
+}
+
+int moveDirectoryByRename(char *sourceName, char *destName) {
+    /*
+     * Prefer a single directory rename when the destination is valid and safe.
+     * Example: mv src renamed_src
+     *          rename() moves the whole tree in one step.
+     * This is the fastest and safest method for a directory move on the same fs.
+     */
+    if (strcmp(sourceName, destName) == 0) {
+        fprintf(stderr, "Source and destination are the same directory: %s\n", sourceName);
+        return 1;
+    }
+
+    if (isDestinationInsideSource(sourceName, destName)) {
+        fprintf(stderr, "Can't move %s into itself or one of its descendants\n", sourceName);
+        return 1;
+    }
+
+    if (access(destName, F_OK) == 0) {
+        if (optNoOverwrite) {
+            fprintf(stderr, "Destination already exists: %s\n", destName);
+            return 1;
+        }
+        if (optConfOverwrite && doNotOverwrite(destName)) {
+            return 1;
+        }
+    }
+
+    if (rename(sourceName, destName) == 0) {
+        if (optDisplayOp) {
+            printf("%s -> %s\n", sourceName, destName);
+        }
+        return 0;
+    }
+
+    fprintf(stderr, "Can't rename directory %s to %s: %s\n", sourceName, destName, strerror(errno));
+    return -1;
+}
+
 int copyDir(char *sourceName, char *destName, int isMove) {
+    /*
+     * For directory moves, try to rename it first. If it fails because the
+     * destination is not safe or not on the same filesystem, continue with the
+     * recursive copy logic without deleting the original tree prematurely.
+     */
+    if (isMove) {
+        int renameResult = moveDirectoryByRename(sourceName, destName);
+        if (renameResult == 0) {
+            return 0;
+        }
+        if (renameResult > 0) {
+            return renameResult;
+        }
+    }
+
     DIR *dir = opendir(sourceName);  
 
     if (dir == NULL) {
