@@ -692,6 +692,8 @@ int copyDir(char *sourceName, char *destName, int isMove) {
      * destination is not safe or not on the same filesystem, continue with the
      * recursive copy logic without deleting the original tree prematurely.
      */
+    int overallStatus = 0;
+
     if (isMove) {
         int renameResult = moveDirectoryByRename(sourceName, destName);
         if (renameResult == 0) {
@@ -749,24 +751,28 @@ int copyDir(char *sourceName, char *destName, int isMove) {
         struct stat st;
 
         if (lstat(fullPathSrc, &st) == 0) {
+            int childStatus = 0;
+
             if (S_ISDIR(st.st_mode)) {
                 if (optRecursive || isMove) {
-                    copyDir(fullPathSrc, fullPathDst, isMove);
+                    childStatus = copyDir(fullPathSrc, fullPathDst, isMove);
                 }
 
             } else if (S_ISREG(st.st_mode)) {
-                executeCopyFile(fullPathSrc, fullPathDst, isMove);
+                childStatus = executeCopyFile(fullPathSrc, fullPathDst, isMove);
 
             } else if (S_ISLNK(st.st_mode)) {
                 if (isMove) {
-                    moveEntry(fullPathSrc, fullPathDst);
+                    childStatus = moveEntry(fullPathSrc, fullPathDst);
                 } else {
-                    copySymlink(fullPathSrc, fullPathDst);
+                    childStatus = copySymlink(fullPathSrc, fullPathDst);
                 }
             }
+
+            if (childStatus != 0 && overallStatus == 0) {
+                overallStatus = childStatus;
+            }
         }
-
-
     }
     closedir(dir);
 
@@ -775,10 +781,16 @@ int copyDir(char *sourceName, char *destName, int isMove) {
     }
 
     if (isMove) {
-        deleteDir(sourceName);
+        if (overallStatus == 0) {
+            if (deleteDir(sourceName) != 0) {
+                overallStatus = errno;
+            }
+        } else {
+            fprintf(stderr, "Move failed for %s; source directory left intact\n", sourceName);
+        }
     }
 
-    return 0;
+    return overallStatus;
 }
 
 int executeCopyDirOrFile(char *sourceName, char *destName, int isMove) {
@@ -797,7 +809,11 @@ int executeCopyDirOrFile(char *sourceName, char *destName, int isMove) {
             }
             return copySymlink(sourceName, destName);
         }
+    } else {
+        fprintf(stderr, "Can't find the source %s\n", sourceName);
+        return 1;
     }
+
     return 0;
 }
 
