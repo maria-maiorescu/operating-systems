@@ -382,6 +382,62 @@ int deleteDir(char *dirName) {
     return 0;
 }
 
+int copySymlink(char *sourceName, char *destName) {
+    char target[PATH_MAX];
+    ssize_t targetLength;
+
+    if (access(destName, F_OK) == 0) {
+        if (optNoOverwrite) {
+            fprintf(stderr, "Destination already exists: %s\n", destName);
+            return 1;
+        }
+        if (optConfOverwrite && doNotOverwrite(destName)) {
+            return 1;
+        }
+    }
+
+    targetLength = readlink(sourceName, target, sizeof(target) - 1);
+    if (targetLength < 0) {
+        fprintf(stderr, "Can't read link target %s: %s\n", sourceName, strerror(errno));
+        return errno;
+    }
+    target[targetLength] = '\0';
+
+    if (symlink(target, destName) < 0) {
+        fprintf(stderr, "Can't create symlink %s: %s\n", destName, strerror(errno));
+        return errno;
+    }
+
+    if (optDisplayOp) {
+        printf("%s -> %s\n", sourceName, destName);
+    }
+
+    return 0;
+}
+
+int moveEntry(char *sourceName, char *destName) {
+    if (access(destName, F_OK) == 0) {
+        if (optNoOverwrite) {
+            fprintf(stderr, "Destination already exists: %s\n", destName);
+            return 1;
+        }
+        if (optConfOverwrite && doNotOverwrite(destName)) {
+            return 1;
+        }
+    }
+
+    if (rename(sourceName, destName) < 0) {
+        fprintf(stderr, "Can't move %s to %s: %s\n", sourceName, destName, strerror(errno));
+        return errno;
+    }
+
+    if (optDisplayOp) {
+        printf("%s -> %s\n", sourceName, destName);
+    }
+
+    return 0;
+}
+
 int executeCopyFile(char *sourceFile, char *destFile, int isMove) {
     #define BUFF_SIZE 1024
 
@@ -558,19 +614,22 @@ int copyDir(char *sourceName, char *destName, int isMove) {
         struct stat st;
 
         if (lstat(fullPathSrc, &st) == 0) {
-            // 6. processing
             if (S_ISDIR(st.st_mode)) {
                 if (optRecursive || isMove) {
                     copyDir(fullPathSrc, fullPathDst, isMove);
                 }
-                
+
             } else if (S_ISREG(st.st_mode)) {
-               executeCopyFile(fullPathSrc, fullPathDst, isMove);
+                executeCopyFile(fullPathSrc, fullPathDst, isMove);
 
             } else if (S_ISLNK(st.st_mode)) {
-                // .....
+                if (isMove) {
+                    moveEntry(fullPathSrc, fullPathDst);
+                } else {
+                    copySymlink(fullPathSrc, fullPathDst);
+                }
             }
-        } 
+        }
 
 
     }
@@ -593,12 +652,15 @@ int executeCopyDirOrFile(char *sourceName, char *destName, int isMove) {
     if (lstat(sourceName, &st) == 0) {
         if (S_ISDIR(st.st_mode)) {
             return copyDir(sourceName, destName, isMove);
-        
+
         } else if (S_ISREG(st.st_mode)) {
             return executeCopyFile(sourceName, destName, isMove);
 
         } else if (S_ISLNK(st.st_mode)) {
-            // .....
+            if (isMove) {
+                return moveEntry(sourceName, destName);
+            }
+            return copySymlink(sourceName, destName);
         }
     }
     return 0;
