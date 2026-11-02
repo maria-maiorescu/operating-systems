@@ -35,7 +35,7 @@ int main(int argc, char ** argv) {
 
     if (pid < 0) {
         fprintf(stderr, "Error while creating the process\n");
-        exit(0);
+        exit(1);
     }
 
     if (pid == 0) {
