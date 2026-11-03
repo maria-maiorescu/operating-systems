@@ -56,10 +56,5 @@ int main (int argc, char **argv) {
     buff[n] = '\0';
     printf("Characters: %s\n", buff);
 
-    if (fd < 0) {
-        fprintf(stderr, "Error, couldn't close the file %s", argv[1]);
-        return 1;
-    }
-
     return 0;
 }
