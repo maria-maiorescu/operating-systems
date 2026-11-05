@@ -5,7 +5,6 @@ Write a C program named mycopy that copies one file to another and supports thes
 -d <dest> : destination file
 -v : verbose mode
 -o <offset> : copy starting from a byte position
--b <bytes> : number of bytes to copy
 -h : display help
 
 Requirements:
@@ -15,7 +14,7 @@ Requirements:
     "Unknown option: -x" --> using optopt.
 
     If -s or -d is missing, print usage and exit.
-    If -o or -b is given, copy only the specified range of bytes from the source file.
+    If -o is given, copy only the specified range of bytes from the source file.
     If -v is enabled, print progress information such as:
         "Copying source.txt to dest.txt"
         "Copied 1024 bytes"
@@ -43,7 +42,6 @@ int main(int argc, char **argv) {
     char *destFile = NULL;
     int verbose = 0;
     int offset = 0;
-    int copyBytes = 0;
 
     while((opt = getopt(argc, argv, "s:d:vo:b:h")) != -1) {
         switch(opt) {
@@ -63,10 +61,6 @@ int main(int argc, char **argv) {
                 offset = atoi(optarg);
                 break;
                 
-            case 'b':
-                copyBytes = atoi(optarg);
-                break;
-
             case 'h':
                 fprintf(stderr, "Usage: %s -s <source> -d <dest> [-v] [-o <offset>] [-b <bytes>] [-h]\n", argv[0]);
                 return 0;
@@ -81,8 +75,28 @@ int main(int argc, char **argv) {
     int srcFd, destFd;
 
     srcFd = open(srcFile, O_RDONLY);
+    if (srcFd < 0) {
+        fprintf(stderr, "Error, couldn't open the source file %s\n", srcFile);
+        return 1;
+    }
+    
     destFd = open(destFile, O_WRONLY | O_CREAT| O_TRUNC, 0644);
+    if (destFd < 0) {
+        close(srcFd);
+        fprintf(stderr, "Error, couldn't open the source file %s\n", destFile);
+        return 1;
+    }
 
+    if (offset > 0) {
+        if (verbose) {
+            printf("Seeking to %d position\n", offset);
+        }
+
+        if ((lseek(srcFd, offset, SEEK_SET)) < 0) {
+            printf("Couldn't seek\n");
+        }
+    }
+    
     ssize_t n;
     char buff[BUFF_SIZE];
 
@@ -110,6 +124,9 @@ int main(int argc, char **argv) {
     close(srcFd);
     close(destFd);
 
+    if (verbose) {
+        printf("Copy successfully from %s to %s \n", srcFile, destFile);
+    }
 
     return 0;
 }
