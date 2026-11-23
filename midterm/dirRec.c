@@ -10,19 +10,15 @@
 #include <string.h>
 #include <sys/stat.h>
 
-#ifndef PATH_MAX
-#define PATH_MAX 4096
-#endif
 
 void list_dir(const char *path) {
     DIR *dir = opendir(path);
-    struct dirent *entry;
-
     if (dir == NULL) {
         fprintf(stderr, "Cannot open directory '%s': %s\n", path, strerror(errno));
         return;
     }
-
+    
+    struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         char full_path[PATH_MAX];
         struct stat st;

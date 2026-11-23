@@ -47,7 +47,7 @@ int main(int argc, char** argv) {
                 charNr = 1;
                 break;
 
-            case 'h':
+            case 'h': 
                 fprintf(stderr, "Usage: %s [-l -w -c -h] file\n -l: <lines-number> -w: <words-number> -c: <characters-number>\n", argv[0]);
                 return 0;
 
@@ -63,6 +63,13 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error, not enough arguments\n");
         return 1;
     }
+
+    char *fileName = argv[optind]; // <--- first arg after options
+    // or:
+    for (int i = optind; i < argc; i++) {
+        argv[i]; // <- arguments after options
+    }
+
 
     pid_t pid = fork();
 

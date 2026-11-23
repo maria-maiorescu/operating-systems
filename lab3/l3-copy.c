@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     int fdDest;
     int readBytes;  // the number of read bytes
 
-    fdSource = open(argv[1], O_RDONLY);     // open the sorce file, in read-only mode
+    fdSource = open(argv[1], O_RDONLY);     // open the source file, in read-only mode
 
     if (fdSource < 0) {
         fprintf(stderr, "Can't open the source file %s: %s\n", argv[1], strerror(errno));
@@ -41,7 +41,7 @@ int main(int argc, char** argv) {
         return errno;
     }
 
-    while ((readBytes = read(fdSource, buff, BUFF_SIZE)) > 0) {   // reads from the file 
+    while ((readBytes = read(fdSource, buff, sizeof(buff))) > 0) {   // reads from the file 
         int writeBytes = write(fdDest, buff, readBytes);    // write the buffer into the dest. file
 
         if (writeBytes != readBytes) {

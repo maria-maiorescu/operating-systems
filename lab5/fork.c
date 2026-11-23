@@ -8,19 +8,19 @@ int main() {
        - returns -1 on error
        - returns 0 in the child
        - returns child's PID in the parent */
-    int id = fork();
+    int pid = fork();
     int status;
 
-    if (id < 0) {
+    if (pid < 0) {
         printf("Error creating the process\n");
         exit(1);
     }
     
-    if (id == 0) {
+    if (pid == 0) {
         /* Child path: id is always 0 here. */
         printf("This is the child\n");
         printf("The PID of the child is %d\n", getpid());
-        printf("The value of the fork return in the child is %d\n", id);
+        printf("The value of the fork return in the child is %d\n", pid);
         printf("The PID of the parent (from child) is %d\n", getppid());
         exit(0);
 
@@ -29,11 +29,11 @@ int main() {
     /* Parent path: id contains the PID of the created child. */
     printf("This is the parent\n");
     printf("The PID of the parent is %d\n", getpid());
-    printf("The value of the fork return in the parent is %d\n", id);
+    printf("The value of the fork return in the parent is %d\n", pid);
     printf("Hello world!\n");
 
     /* waitpid() collects the child's termination status in "status". */
-    if (waitpid(id, &status, 0) == -1) {
+    if (waitpid(pid, &status, 0) == -1) {
         printf("Error waiting for child process\n");
         exit(1);
     }

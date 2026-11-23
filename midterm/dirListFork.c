@@ -36,10 +36,8 @@ int traverseDirectory (const char *dirPath) {
         }
 
         if (S_ISDIR(st.st_mode)) {
-            traverseDirectory(fullPath);
-        }
-
-        else if (S_ISREG(st.st_mode)) {
+            traverseDirectory(fullPath); // <-- recursive!
+        } else if (S_ISREG(st.st_mode)) {
             printf("%s\t%lld\n", fullPath, st.st_size);
         }
     }

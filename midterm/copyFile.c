@@ -34,14 +34,14 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    ssize_t n;
+    ssize_t readBytes;
     char buf[BUFF_SIZE];
 
-    while ((n = read(fdSrc, buf, sizeof(buf))) > 0) {
+    while ((readBytes = read(fdSrc, buf, sizeof(buf))) > 0) {
         ssize_t written = 0;
 
-        while (written < n) {
-            ssize_t writeBytes = write(fdDest, buf + written, n - written);
+        while (written < readBytes) {
+            ssize_t writeBytes = write(fdDest, buf + written, readBytes - written);
 
             if (writeBytes < 0) {
                 fprintf(stderr, "Error, couldn't write %d\n", errno);
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (n < 0) {
+    if (readBytes < 0) {
         close(fdDest);
 
         fprintf(stderr, "Couldn't read the file %s, error %d\n", argv[1], errno);
